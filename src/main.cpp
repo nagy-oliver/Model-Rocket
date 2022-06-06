@@ -91,7 +91,7 @@ void loop() {
 
 
   //BMP section:
-/*
+
   temperature = bmp.readTemperature();
   Serial.print("Temperature = ");
   Serial.print(temperature);
@@ -120,7 +120,6 @@ void loop() {
   
   Serial.println();
   delay(500);
-  */
 }
 
 void calculate_IMU_error() {
