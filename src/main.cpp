@@ -31,18 +31,6 @@ void setup() {
   calculate_IMU_error();
   Serial.println("MPU connection successful");
 
-  // Configure Gyro Sensitivity - Full Scale Range (default +/- 250deg/s)
-  // Wire.beginTransmission(MPU);
-  // Wire.write(0x1B);                   // Talk to the GYRO_CONFIG register (1B hex)
-  // Wire.write(0x10);                   // Set the register bits as 00010000 (1000deg/s full scale)
-  // Wire.endTransmission(true);
-  // delay(20);
-  // Configure Accelerometer Sensitivity - Full Scale Range (default +/- 2g)
-  // Wire.beginTransmission(MPU);
-  // Wire.write(0x1C);                  //Talk to the ACCEL_CONFIG register (1C hex)
-  // Wire.write(0x10);                  //Set the register bits as 00010000 (+/- 8g full scale range)
-  // Wire.endTransmission(true);
-
   //BMP setup
   if (!bmp.begin()) {
 	Serial.println("Could not find a valid BMP085 sensor, check wiring!");
@@ -65,8 +53,8 @@ void loop() {
   AccY = (Wire.read() << 8 | Wire.read()) / 16384.0; // Y-axis value
   AccZ = (Wire.read() << 8 | Wire.read()) / 16384.0; // Z-axis value
   // Calculating Roll and Pitch from the accelerometer data
-  accAngleX = (atan(AccY / sqrt(pow(AccX, 2) + pow(AccZ, 2))) * 180 / PI) - 0.58; // AccErrorX ~(0.58) See the calculate_IMU_error()custom function for more details
-  accAngleY = (atan(-1 * AccX / sqrt(pow(AccY, 2) + pow(AccZ, 2))) * 180 / PI) + 1.58; // AccErrorY ~(-1.58)
+  accAngleX = (atan(AccY / sqrt(pow(AccX, 2) + pow(AccZ, 2))) * 180 / PI) - AccErrorX; // AccErrorX ~(0.58) See the calculate_IMU_error()custom function for more details
+  accAngleY = (atan(-1 * AccX / sqrt(pow(AccY, 2) + pow(AccZ, 2))) * 180 / PI) - AccErrorY; // AccErrorY ~(-1.58)
   // === Read gyroscope data === //
   previousTime = currentTime;        // Previous time is stored before the actual time read
   currentTime = millis();            // Current time actual time read
@@ -103,7 +91,7 @@ void loop() {
 
 
   //BMP section:
-
+/*
   temperature = bmp.readTemperature();
   Serial.print("Temperature = ");
   Serial.print(temperature);
@@ -132,6 +120,7 @@ void loop() {
   
   Serial.println();
   delay(500);
+  */
 }
 
 void calculate_IMU_error() {
