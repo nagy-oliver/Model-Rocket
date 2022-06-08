@@ -2,9 +2,21 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_BMP085.h>
+#include <Servo.h>
 
 Adafruit_BMP085 bmp;
-float pressure, temperature;
+float pressure, temperature, altitude, previousAltitude;
+
+Servo servo;
+int servoPin;
+
+//modes: not ready, ready, ascent, recovery
+void mode_1(), mode_2(), mode_3(), mode_4();
+int mode = 1;
+float lastTime, takeoffTime;
+boolean ledState = false;
+boolean gyroReliable = true; //gyro values stop being reliable after apogee() is called
+boolean takeoff(), emergency(), apogee();
 
 void calculate_IMU_error();
 
@@ -16,8 +28,18 @@ float roll, pitch, yaw;
 float AccErrorX, AccErrorY, GyroErrorX, GyroErrorY, GyroErrorZ;
 float elapsedTime, currentTime, previousTime;
 int c = 0;
+
+void gyro(), baro();
   
 void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
+  lastTime = millis();
+
+  // servoPin = 
+  servo.attach(servoPin);
+  //servo.write();
+
   //Start the serial
   Serial.begin(19200);
   Serial.print("Serial communication estabilished");
@@ -36,25 +58,68 @@ void setup() {
 	Serial.println("Could not find a valid BMP085 sensor, check wiring!");
 	while (1) {}
   } Serial.println("BMP connection successful");
+  //Find ground level pressure
+  pressure = 0;
+  for(int i = 0; i < 10; i++) {
+    pressure += bmp.readPressure();
+  }
+  pressure /= 10;
 
   delay(20);
 }
   
 void loop() {
-  //MPU section:
 
-  // === Read acceleromter data === //
+  gyro();
+  baro();
+
+  switch (mode) {
+    case 1:
+      mode_1();
+      break;
+    case 2:
+      mode_2();
+      break;
+    case 3:
+      mode_3();
+      break;
+    case 4:
+      mode_4();
+      break;
+    default:
+      mode = 1;
+  }
+  
+  // Debugging purposes:
+  Serial.print(roll);
+  Serial.print("/");
+  Serial.print(pitch);
+  Serial.print("/");
+  Serial.println(yaw);
+
+  Serial.print("Altitude: ");
+  Serial.println(altitude);
+
+}
+
+
+
+
+void gyro() {
+  //Start communication with MPU
   Wire.beginTransmission(MPU);
   Wire.write(0x3B); // Start with register 0x3B (ACCEL_XOUT_H)
   Wire.endTransmission(false);
   Wire.requestFrom(MPU, 6, true); // Read 6 registers total, each axis value is stored in 2 registers
-  //For a range of +-2g, we need to divide the raw values by 16384, according to the datasheet
+  
   AccX = (Wire.read() << 8 | Wire.read()) / 16384.0; // X-axis value
   AccY = (Wire.read() << 8 | Wire.read()) / 16384.0; // Y-axis value
   AccZ = (Wire.read() << 8 | Wire.read()) / 16384.0; // Z-axis value
+  
   // Calculating Roll and Pitch from the accelerometer data
   accAngleX = (atan(AccY / sqrt(pow(AccX, 2) + pow(AccZ, 2))) * 180 / PI) - AccErrorX; // AccErrorX ~(0.58) See the calculate_IMU_error()custom function for more details
   accAngleY = (atan(-1 * AccX / sqrt(pow(AccY, 2) + pow(AccZ, 2))) * 180 / PI) - AccErrorY; // AccErrorY ~(-1.58)
+  
   // === Read gyroscope data === //
   previousTime = currentTime;        // Previous time is stored before the actual time read
   currentTime = millis();            // Current time actual time read
@@ -64,11 +129,12 @@ void loop() {
   Wire.write(0x43); // Gyro data first register address 0x43
   Wire.endTransmission();
   Wire.requestFrom(MPU, 6, true); // Read 4 registers total, each axis value is stored in 2 registers
+  
   GyroX = (Wire.read() << 8 | Wire.read()) / 131.0; // For a 250deg/s range we have to divide first the raw value by 131.0, according to the datasheet
   GyroY = (Wire.read() << 8 | Wire.read()) / 131.0;
   GyroZ = (Wire.read() << 8 | Wire.read()) / 131.0;
 
-  //error correction
+  //Error correction
   GyroX = GyroX - GyroErrorX;
   GyroY = GyroY - GyroErrorY;
   GyroZ = GyroZ - GyroErrorZ;
@@ -80,52 +146,18 @@ void loop() {
   // Complementary filter - combine acceleromter and gyro angle values
   roll = 0.96 * gyroAngleX + 0.04 * accAngleX;
   pitch = 0.96 * gyroAngleY + 0.04 * accAngleY;
-
-  // Print the values on the serial monitor
-  Serial.print(roll);
-  Serial.print("/");
-  Serial.print(pitch);
-  Serial.print("/");
-  Serial.println(yaw);
-
-
-
-  //BMP section:
-
-  temperature = bmp.readTemperature();
-  Serial.print("Temperature = ");
-  Serial.print(temperature);
-  Serial.println(" *C");
-  
-  pressure = bmp.readPressure();
-  Serial.print("Pressure = ");
-  Serial.print(pressure);
-  Serial.println(" Pa");
-  
-  Serial.print("Altitude = ");
-  Serial.print(bmp.readAltitude(pressure));
-  Serial.println(" meters");
-
-  Serial.print("Pressure at sealevel (calculated) = ");
-  Serial.print(bmp.readSealevelPressure());
-  Serial.println(" Pa");
-
-  // you can get a more precise measurement of altitude
-  // if you know the current sea level pressure which will
-  // vary with weather and such. If it is 1015 millibars
-  // that is equal to 101500 Pascals.
-  Serial.print("Real altitude = ");
-  Serial.print(bmp.readAltitude(bmp.readSealevelPressure()));
-  Serial.println(" meters");
-  
-  Serial.println();
-  delay(500);
 }
 
+void baro() {
+  previousAltitude = altitude;
+  altitude = bmp.readAltitude(pressure);
+}
+
+
+
+
 void calculate_IMU_error() {
-  // We can call this funtion in the setup section to calculate the accelerometer and gyro data error. From here we will get the error values used in the above equations printed on the Serial Monitor.
-  // Note that we should place the IMU flat in order to get the proper values, so that we then can the correct values
-  // Read accelerometer values 200 times
+  // Function to correct the error in MPU6050
   while (c < 200) {
     Wire.beginTransmission(MPU);
     Wire.write(0x3B);
@@ -143,6 +175,7 @@ void calculate_IMU_error() {
   AccErrorX = AccErrorX / 200;
   AccErrorY = AccErrorY / 200;
   c = 0;
+
   // Read gyro values 200 times
   while (c < 200) {
     Wire.beginTransmission(MPU);
@@ -162,7 +195,8 @@ void calculate_IMU_error() {
   GyroErrorX = GyroErrorX / 200;
   GyroErrorY = GyroErrorY / 200;
   GyroErrorZ = GyroErrorZ / 200;
-  // Print the error values on the Serial Monitor
+
+  // Print the error values on the Serial Monitor, debuging purposes only
   Serial.print("AccErrorX: ");
   Serial.println(AccErrorX);
   Serial.print("AccErrorY: ");
@@ -173,4 +207,113 @@ void calculate_IMU_error() {
   Serial.println(GyroErrorY);
   Serial.print("GyroErrorZ: ");
   Serial.println(GyroErrorZ);
+}
+
+//check consequent altitudes, if they keep increasing, return true
+boolean takeoff() {
+  for(int i = 0; i < 5; i++) {
+    delay(200);
+
+    gyro();
+
+    baro();
+
+    if((int) altitude < (int) previousAltitude) {
+      return false;
+    }
+  }
+  return true;
+}
+
+//checks consequent gyro angles
+boolean emergency() {
+  for(int i = 0; i < 5; i++) {
+    delay(200);
+
+    gyro();
+
+    if(roll > 90 || yaw > 90) {
+      return true;
+    }
+  }
+  return false;
+}
+
+//200ms, 5measurements, ints, no delay afterwards
+boolean apogee() {
+  gyroReliable = false;
+
+  for(int i = 0; i < 5; i++) {
+    delay(200);
+
+    baro();
+
+    if((int) altitude > (int) previousAltitude) {
+      return false;
+    }
+  }
+  return true;
+}
+
+
+
+
+//check the inclination, if it is less than 45°, switch to mode 2
+//we care about roll and yaw, as the mpu will be turned upwards
+void mode_1() {
+  ledState = false;
+  digitalWrite(LED_BUILTIN, ledState);
+  if(roll < 45 && yaw < 45) {
+    mode = 2;
+  }
+}
+
+void mode_2() {
+  if(currentTime - lastTime > 1000) {
+    ledState = !ledState;
+    digitalWrite(LED_BUILTIN, ledState);
+    lastTime = millis();
+  }
+
+  if(roll > 45 && yaw > 45) {
+    mode = 1;
+    return;
+  }
+
+  altitude = bmp.readAltitude(pressure);
+  if(altitude >= 10 && takeoff()) {
+    mode = 3;
+    takeoffTime = millis();
+    previousAltitude = altitude;
+  }
+}
+
+void mode_3() {
+  if(currentTime - lastTime > 100) {
+    ledState = !ledState;
+    digitalWrite(LED_BUILTIN, ledState);
+    lastTime = millis();
+  }
+
+  previousAltitude = altitude;
+  altitude = bmp.readAltitude(pressure);
+
+  //check for emergency deployment
+  if(currentTime - takeoffTime > 15000 || (gyroReliable && (roll > 90 || yaw > 90) && emergency())) {
+    mode = 4;
+    return;
+  }
+  //check for apogee
+  if(((int) altitude < (int) previousAltitude) && apogee()) {
+    mode = 4;
+    return;
+  }
+
+}
+
+void mode_4() {
+  ledState = true;
+  digitalWrite(LED_BUILTIN, ledState);
+
+  //servo.write(180);
 }
