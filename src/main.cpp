@@ -232,6 +232,8 @@ boolean emergency() {
 
     gyro();
 
+    baro();
+
     if(roll > 90 || yaw > 90) {
       return true;
     }
@@ -263,7 +265,7 @@ boolean apogee() {
 void mode_1() {
   ledState = false;
   digitalWrite(LED_BUILTIN, ledState);
-  if(roll < 45 && yaw < 45) {
+  if(abs(roll) < 45 && abs(yaw) < 45) {
     mode = 2;
   }
 }
@@ -275,7 +277,7 @@ void mode_2() {
     lastTime = millis();
   }
 
-  if(roll > 45 && yaw > 45) {
+  if(abs(roll) > 45 && abs(yaw) > 45) {
     mode = 1;
     return;
   }
@@ -299,7 +301,7 @@ void mode_3() {
   altitude = bmp.readAltitude(pressure);
 
   //check for emergency deployment
-  if(currentTime - takeoffTime > 15000 || (gyroReliable && (roll > 90 || yaw > 90) && emergency())) {
+  if(currentTime - takeoffTime > 15000 || (gyroReliable && (abs(roll) > 90 || abs(yaw) > 90) && emergency())) {
     mode = 4;
     return;
   }
