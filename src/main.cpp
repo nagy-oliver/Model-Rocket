@@ -36,13 +36,13 @@ void setup() {
   digitalWrite(LED_BUILTIN, HIGH);
   lastTime = millis();
 
-  // servoPin = 
+  servoPin = 2;
   servo.attach(servoPin);
-  //servo.write();
+  servo.write(180);
 
   //Start the serial
-  Serial.begin(19200);
-  Serial.print("Serial communication estabilished");
+  // Serial.begin(19200);
+  // Serial.print("Serial communication estabilished");
 
   //MPU setup
   Wire.begin();                      // Initialize comunication
@@ -51,13 +51,13 @@ void setup() {
   Wire.write(0x00);                  // Make reset - place a 0 into the 6B register
   Wire.endTransmission(true);
   calculate_IMU_error();
-  Serial.println("MPU connection successful");
+  // Serial.println("MPU connection successful");
 
   //BMP setup
   if (!bmp.begin()) {
-	Serial.println("Could not find a valid BMP085 sensor, check wiring!");
+	// Serial.println("Could not find a valid BMP085 sensor, check wiring!");
 	while (1) {}
-  } Serial.println("BMP connection successful");
+  } // Serial.println("BMP connection successful");
   //Find ground level pressure
   pressure = 0;
   for(int i = 0; i < 10; i++) {
@@ -91,6 +91,7 @@ void loop() {
   }
   
   // Debugging purposes:
+  /*
   Serial.print(roll);
   Serial.print("/");
   Serial.print(pitch);
@@ -99,6 +100,10 @@ void loop() {
 
   Serial.print("Altitude: ");
   Serial.println(altitude);
+*/
+  // Serial.print("Mode: ");
+  // Serial.println(mode);
+  
 
 }
 
@@ -197,16 +202,16 @@ void calculate_IMU_error() {
   GyroErrorZ = GyroErrorZ / 200;
 
   // Print the error values on the Serial Monitor, debuging purposes only
-  Serial.print("AccErrorX: ");
-  Serial.println(AccErrorX);
-  Serial.print("AccErrorY: ");
-  Serial.println(AccErrorY);
-  Serial.print("GyroErrorX: ");
-  Serial.println(GyroErrorX);
-  Serial.print("GyroErrorY: ");
-  Serial.println(GyroErrorY);
-  Serial.print("GyroErrorZ: ");
-  Serial.println(GyroErrorZ);
+  // Serial.print("AccErrorX: ");
+  // Serial.println(AccErrorX);
+  // Serial.print("AccErrorY: ");
+  // Serial.println(AccErrorY);
+  // Serial.print("GyroErrorX: ");
+  // Serial.println(GyroErrorX);
+  // Serial.print("GyroErrorY: ");
+  // Serial.println(GyroErrorY);
+  // Serial.print("GyroErrorZ: ");
+  // Serial.println(GyroErrorZ);
 }
 
 //check consequent altitudes, if they keep increasing, return true
@@ -277,7 +282,7 @@ void mode_2() {
     lastTime = millis();
   }
 
-  if(abs(roll) > 45 && abs(yaw) > 45) {
+  if(abs(roll) > 45 || abs(yaw) > 45) {
     mode = 1;
     return;
   }
@@ -317,5 +322,5 @@ void mode_4() {
   ledState = true;
   digitalWrite(LED_BUILTIN, ledState);
 
-  //servo.write(180);
+  servo.write(90);
 }
